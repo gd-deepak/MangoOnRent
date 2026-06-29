@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans text-gray-800 bg-white;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-mango-500 hover:bg-mango-600 text-white font-semibold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-mango-500 text-mango-600 hover:bg-mango-50 font-semibold rounded-xl transition-all duration-200;
+  }
+  .btn-leaf {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-leaf-600 hover:bg-leaf-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+  }
+  .section-heading {
+    @apply font-display text-3xl md:text-4xl font-bold text-gray-900;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-mango-400 focus:border-transparent transition-all bg-white;
+  }
+  .badge-rented {
+    @apply inline-block px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded-full;
+  }
+  .badge-available {
+    @apply inline-block px-2 py-0.5 bg-leaf-100 text-leaf-700 text-xs font-semibold rounded-full;
+  }
+  .badge-prebook {
+    @apply inline-block px-2 py-0.5 bg-mango-100 text-mango-700 text-xs font-semibold rounded-full;
+  }
+}

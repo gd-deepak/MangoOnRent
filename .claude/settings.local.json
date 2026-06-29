@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DeepakGadhave\\\\Desktop\\\\MangoOnRent\\\\css\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DeepakGadhave\\\\Desktop\\\\MangoOnRent\\\\js\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DeepakGadhave\\\\Desktop\\\\MangoOnRent\\\\images\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DeepakGadhave\\\\Desktop\\\\MangoOnRent\\\\public\\\\images\\\\QR\")",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(Stop-Process -Id 32592 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\DeepakGadhave\\\\Desktop\\\\MangoOnRent\\\\public\\\\photos\")",
+      "WebFetch(domain:www.pexels.com)"
+    ]
+  }
+}

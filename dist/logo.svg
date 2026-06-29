@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 56" fill="none">
+  <!-- Mango fruit body -->
+  <ellipse cx="24" cy="32" rx="13" ry="17" fill="#F59E0B"/>
+  <!-- Mango blush/highlight -->
+  <ellipse cx="19" cy="26" rx="5" ry="8" fill="#FCD34D" opacity="0.55"/>
+  <!-- Mango bottom shadow -->
+  <ellipse cx="26" cy="44" rx="7" ry="3" fill="#D97706" opacity="0.4"/>
+  <!-- Stem -->
+  <path d="M24 15 C23 10 26 6 31 4" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <!-- Leaf -->
+  <path d="M31 4 C39 5 40 13 33 14 C28 14 24 15 24 15 C26 11 28 5 31 4Z" fill="#16a34a"/>
+  <!-- Leaf vein -->
+  <path d="M31 4 C29 8 26 12 24 15" stroke="#15803d" stroke-width="0.8" opacity="0.6" fill="none"/>
+
+  <!-- "Mango" text -->
+  <text x="46" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="22" font-weight="700" fill="#1C1C1C" letter-spacing="-0.5">Mango</text>
+  <!-- "OnRent" text -->
+  <text x="46" y="46" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="600" fill="#F59E0B" letter-spacing="0.5">OnRent</text>
+</svg>
