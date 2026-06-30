@@ -21,7 +21,7 @@ var SUPPORT_PHONE          = '+91 90963 65035'
 var HEADERS = {
   Contacts: ['timestamp','name','email','phone','subject','message'],
   Bookings: ['timestamp','booking_id','tree_ids','tree_count','tree_mode','name','email','phone','city','package_id','package_name','amount_paid','pincode','address','notes','txn_id','payment_status','payment_screenshot_url'],
-  Payments: ['timestamp','booking_id','tree_ids','tree_count','name','phone','email','package_name','amount','txn_id','payment_status'],
+  Payments: ['timestamp','booking_id','tree_ids','tree_count','name','phone','email','package_name','amount','txn_id','payment_status','payment_screenshot_url'],
   Users:    ['timestamp','name','email','phone','city','address','password_hash','password_plain','updated_at'],
   Admins:   ['timestamp','username','name','email','password_plain','added_by'],
 }
@@ -456,6 +456,25 @@ function updateAdminRecord(data) {
 // ── Submit booking with email ─────────────────────────────────────────────────
 
 function submitBooking(data) {
+  // Check for double-booking: reject if any requested tree is already booked
+  var requestedIds = String(data.tree_ids || '').split(',').map(function(s) { return s.trim() }).filter(Boolean)
+  if (requestedIds.length > 0) {
+    var existingBookings = sheetToObjects(getOrCreateSheet('Bookings'))
+    var bookedSet = {}
+    existingBookings.forEach(function(b) {
+      var status = String(b.payment_status || '').toLowerCase()
+      if (!status.includes('cancel') && !status.includes('failed')) {
+        String(b.tree_ids || '').split(',').forEach(function(id) {
+          var t = id.trim(); if (t) bookedSet[t] = true
+        })
+      }
+    })
+    var conflicts = requestedIds.filter(function(id) { return bookedSet[id] })
+    if (conflicts.length > 0) {
+      return err('Tree(s) already booked: ' + conflicts.join(', ') + '. Please choose different trees.')
+    }
+  }
+
   // Save screenshot to Drive if provided
   var screenshotUrl = ''
   if (data.screenshot_base64 && data.screenshot_base64.length > 100) {
@@ -471,7 +490,10 @@ function submitBooking(data) {
   bSheet.appendRow(bRow)
 
   var pSheet = getOrCreateSheet('Payments')
-  var pRow = HEADERS.Payments.map(function(h) { return data[h] !== undefined ? data[h] : '' })
+  var pRow = HEADERS.Payments.map(function(h) {
+    if (h === 'payment_screenshot_url') return screenshotUrl
+    return data[h] !== undefined ? data[h] : ''
+  })
   pSheet.appendRow(pRow)
 
   if (data.email && data.name) {
@@ -494,6 +516,26 @@ function legacySubmit(data) {
 }
 
 // ── Test / setup ──────────────────────────────────────────────────────────────
+
+/**
+ * Run this ONCE to authorize DriveApp (screenshot uploads won't work without it).
+ * Check the Execution log — it should say "Drive access OK".
+ */
+function testDriveAccess() {
+  try {
+    var folder = getOrCreatePaymentFolder()
+    Logger.log('Drive access OK — folder: ' + folder.getName() + ' (' + folder.getId() + ')')
+    // Upload a tiny test file to confirm write access
+    var blob = Utilities.newBlob('test', 'text/plain', 'drive-test.txt')
+    var file = folder.createFile(blob)
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    Logger.log('Test file created: https://drive.google.com/file/d/' + file.getId() + '/view')
+    file.setTrashed(true) // clean up
+    Logger.log('✅ DriveApp fully authorized and working!')
+  } catch (e) {
+    Logger.log('❌ Drive error: ' + e.toString())
+  }
+}
 
 function testSetup() {
   ['Contacts','Bookings','Payments','Users','Admins'].forEach(function(name) {

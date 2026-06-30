@@ -433,6 +433,15 @@ export default function Admin() {
     { key: 'txn_id',         label: 'TXN ID',    render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
     { key: 'payment_status', label: 'Status',    render: (v) => <Badge value={v} /> },
     {
+      key: 'payment_screenshot_url', label: 'Screenshot',
+      render: (v) => v ? (
+        <a href={v} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 hover:text-blue-700 transition-colors" title="View payment screenshot">
+          <Eye size={14} />
+        </a>
+      ) : <span className="text-gray-300 text-xs">—</span>,
+    },
+    {
       key: '_actions', label: '',
       render: (_, row) => (
         <button onClick={() => setEditModal({ type: 'booking', row })}
@@ -487,6 +496,15 @@ export default function Admin() {
     { key: 'tree_ids',       label: 'Trees',     render: (v) => <span className="font-mono text-xs text-mango-700">{v || '—'}</span> },
     { key: 'amount',         label: 'Amount',    render: (v) => v ? `₹${Number(v).toLocaleString('en-IN')}` : '—' },
     { key: 'txn_id',         label: 'TXN ID',    render: (v) => <span className="font-mono text-xs">{v || '—'}</span> },
+    {
+      key: 'payment_screenshot_url', label: 'Screenshot',
+      render: (v) => v ? (
+        <a href={v} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-500 hover:text-blue-700 transition-colors" title="View payment screenshot">
+          <Eye size={14} />
+        </a>
+      ) : <span className="text-gray-300 text-xs">—</span>,
+    },
     {
       key: 'payment_status', label: 'Status',
       render: (v, row) => {

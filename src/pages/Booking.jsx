@@ -1,15 +1,14 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { CheckCircle, Loader2, ArrowRight, ArrowLeft, Copy, QrCode, Search, Shuffle, X, LogIn, UserPlus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PACKAGES, SITE, PRICING } from '../config/siteConfig'
 import { trees } from '../data/trees'
-import { submitBooking } from '../utils/sheets'
+import { submitBooking, getAllBookings } from '../utils/sheets'
 import { img } from '../config/images'
 import { useAuth } from '../context/AuthContext'
 
 const UPI_ID = SITE.upiId
-const AVAILABLE_TREES = trees.filter((t) => !t.isRented)
-const AUTO_TREE_ID = AVAILABLE_TREES[0]?.id ?? 'MGO-279'
+const STATIC_BOOKED = new Set(trees.filter((t) => t.isRented).map((t) => t.id))
 
 // ── Step indicator ────────────────────────────────────────────────────────────
 function StepBar({ step }) {
@@ -86,15 +85,16 @@ function PackageOption({ pkg, selected, onSelect }) {
 }
 
 // ── Multi-tree selector ───────────────────────────────────────────────────────
-function TreeSelector({ treeMode, selectedTrees, onModeChange, onToggleTree, onClearTrees }) {
+function TreeSelector({ treeMode, selectedTrees, availableTrees, onModeChange, onToggleTree, onClearTrees }) {
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
     const q = search.toUpperCase().trim()
-    return q ? AVAILABLE_TREES.filter((t) => t.id.includes(q)) : AVAILABLE_TREES
-  }, [search])
+    return q ? availableTrees.filter((t) => t.id.includes(q)) : availableTrees
+  }, [search, availableTrees])
 
   const selectedSet = useMemo(() => new Set(selectedTrees), [selectedTrees])
+  const firstAvailableId = availableTrees[0]?.id ?? '—'
 
   return (
     <div className="space-y-3">
@@ -117,7 +117,7 @@ function TreeSelector({ treeMode, selectedTrees, onModeChange, onToggleTree, onC
               <div className="font-bold text-gray-900 text-sm">Auto-assign</div>
               <div className="text-xs text-gray-500 mt-0.5">We assign trees in sequence based on quantity</div>
               {treeMode === 'auto' && (
-                <div className="text-xs text-mango-600 font-semibold mt-1">→ Starts from: {AUTO_TREE_ID}</div>
+                <div className="text-xs text-mango-600 font-semibold mt-1">→ Starts from: {firstAvailableId}</div>
               )}
             </div>
             <div className="shrink-0">
@@ -365,12 +365,56 @@ export default function Booking() {
   const handleScreenshotChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { setError('Screenshot must be under 5 MB.'); return }
+    if (file.size > 10 * 1024 * 1024) { setError('Screenshot must be under 10 MB.'); return }
     setScreenshotName(file.name)
+    // Compress to max 1200px / JPEG 75% so base64 stays small enough for Apps Script
     const reader = new FileReader()
-    reader.onload = (ev) => setScreenshot(ev.target.result)
+    reader.onload = (ev) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 1200
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width  = Math.round(img.width  * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        setScreenshot(canvas.toDataURL('image/jpeg', 0.75))
+      }
+      img.src = ev.target.result
+    }
     reader.readAsDataURL(file)
   }
+
+  const [liveBookedIds, setLiveBookedIds] = useState(STATIC_BOOKED)
+
+  useEffect(() => {
+    // Load localStorage booked trees immediately
+    const localSet = new Set(STATIC_BOOKED)
+    try {
+      const stored = JSON.parse(localStorage.getItem('mor_booked_trees') || '{}')
+      Object.keys(stored).forEach((id) => localSet.add(id))
+    } catch { /* ignore */ }
+    setLiveBookedIds(new Set(localSet))
+
+    // Then merge real bookings from spreadsheet (includes pending)
+    getAllBookings().then((res) => {
+      if (res.ok && Array.isArray(res.data)) {
+        res.data.forEach((b) => {
+          const status = String(b.payment_status || '').toLowerCase()
+          if (status.includes('cancel') || status.includes('failed')) return
+          String(b.tree_ids || '').split(',').forEach((id) => {
+            const t = id.trim(); if (t) localSet.add(t)
+          })
+        })
+      }
+      setLiveBookedIds(new Set(localSet))
+    }).catch(() => {})
+  }, [])
+
+  const liveAvailableTrees = useMemo(
+    () => trees.filter((t) => !liveBookedIds.has(t.id)),
+    [liveBookedIds]
+  )
 
   const [bookingId] = useState(() => `BK-${Date.now().toString(36).toUpperCase()}`)
 
@@ -383,12 +427,12 @@ export default function Booking() {
 
   const totalAmount = PRICING.prebookAmount * Math.max(treeCount, 1)
 
-  // The tree IDs shown everywhere: custom = picked array, auto = sequential starting from first available
+  // The tree IDs shown everywhere: custom = picked array, auto = sequential starting from first live-available
   const resolvedTreeIds = useMemo(() => {
     if (form.treeMode === 'custom') return form.selectedTrees
     const count = parseInt(form.autoTreeCount || 1)
-    return AVAILABLE_TREES.slice(0, count).map((t) => t.id)
-  }, [form.treeMode, form.selectedTrees, form.autoTreeCount])
+    return liveAvailableTrees.slice(0, count).map((t) => t.id)
+  }, [form.treeMode, form.selectedTrees, form.autoTreeCount, liveAvailableTrees])
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -421,6 +465,10 @@ export default function Booking() {
     e.preventDefault()
     if (!txnId.trim()) {
       setError('Please enter your UPI Transaction ID / UTR number.')
+      return
+    }
+    if (!screenshot) {
+      setError('Please upload a screenshot of your payment.')
       return
     }
     setSubmitting(true)
@@ -604,11 +652,12 @@ export default function Booking() {
                   <div>
                     <h2 className="text-lg font-bold text-gray-900 mb-1">2. Select Your Trees</h2>
                     <p className="text-xs text-gray-400 mb-4">
-                      {AVAILABLE_TREES.length} trees available · Pick specific trees or let us assign.
+                      {liveAvailableTrees.length} trees available · Pick specific trees or let us assign.
                     </p>
                     <TreeSelector
                       treeMode={form.treeMode}
                       selectedTrees={form.selectedTrees}
+                      availableTrees={liveAvailableTrees}
                       onModeChange={handleModeChange}
                       onToggleTree={handleToggleTree}
                       onClearTrees={handleClearTrees}
@@ -808,7 +857,8 @@ export default function Booking() {
                     {/* Screenshot upload */}
                     <div>
                       <label className="block text-sm font-semibold text-gray-800 mb-1.5">
-                        Payment Screenshot <span className="text-gray-400 font-normal text-xs">(optional, max 5 MB)</span>
+                        Payment Screenshot <span className="text-red-500">*</span>
+                        <span className="text-gray-400 font-normal text-xs ml-1">(required, max 5 MB)</span>
                       </label>
                       <label className={`flex items-center gap-3 w-full cursor-pointer border-2 border-dashed rounded-xl px-4 py-3 transition-colors ${screenshot ? 'border-leaf-400 bg-leaf-50' : 'border-gray-200 hover:border-mango-400'}`}>
                         <input type="file" accept="image/*" className="sr-only" onChange={handleScreenshotChange} />

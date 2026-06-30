@@ -14,8 +14,6 @@ export default function Trees() {
   const [page,         setPage]         = useState(1)
   const [realBookings, setRealBookings] = useState({}) // treeId → {name, bookingId, isReal}
   const [loadingReal,  setLoadingReal]  = useState(true)
-  const [extraBooked,  setExtraBooked]  = useState(0) // count of newly booked trees beyond pre-rented 278
-
   // Merge static trees with real booking data from spreadsheet + localStorage
   const mergedTrees = useMemo(() => {
     return trees.map((t) => {
@@ -26,10 +24,11 @@ export default function Trees() {
     })
   }, [realBookings])
 
+  // Live stats derived from merged data (includes all dummy + real bookings)
   const dynamicStats = useMemo(() => {
-    const rented = TREE_STATS.rented + extraBooked
+    const rented = mergedTrees.filter((t) => t.isRented).length
     return { total: TREE_STATS.total, rented, available: TREE_STATS.total - rented }
-  }, [extraBooked])
+  }, [mergedTrees])
 
   useEffect(() => {
     // Load immediately-booked trees from localStorage
@@ -51,20 +50,9 @@ export default function Trees() {
         })
       }
       // Count newly booked trees beyond the pre-rented 278
-      const newlyBooked = Object.keys(combined).filter((id) => {
-        const num = parseInt(id.replace('MGO-', ''), 10)
-        return num > TREE_STATS.rented
-      }).length
-      setExtraBooked(newlyBooked)
-      setRealBookings(combined)
+        setRealBookings(combined)
       setLoadingReal(false)
     }).catch(() => {
-      // Even if fetch fails, show localStorage data
-      const newlyBooked = Object.keys(localBooked).filter((id) => {
-        const num = parseInt(id.replace('MGO-', ''), 10)
-        return num > TREE_STATS.rented
-      }).length
-      setExtraBooked(newlyBooked)
       setRealBookings(localBooked)
       setLoadingReal(false)
     })
@@ -212,10 +200,7 @@ export default function Trees() {
 
 // ── Tree card ─────────────────────────────────────────────────────────────────
 function TreeCard({ tree }) {
-  // Abbreviate renter name for privacy: "Aarav Sharma" → "A. Sharma"
-  const displayName = tree.renterName
-    ? tree.renterName.split(' ').map((w, i) => i === 0 ? w[0] + '.' : w).join(' ')
-    : null
+  const displayName = tree.renterName || null
 
   return (
     <div className={`group relative rounded-2xl overflow-hidden shadow-sm border-2 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${

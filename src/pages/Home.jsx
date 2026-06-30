@@ -3,8 +3,37 @@ import { Link } from 'react-router-dom'
 import { CheckCircle, ArrowRight, Star, TreePine, Package, Truck } from 'lucide-react'
 import { PACKAGES, SITE } from '../config/siteConfig'
 import { reviews } from '../data/reviews'
-import { TREE_STATS } from '../data/trees'
+import { TREE_STATS, trees } from '../data/trees'
+import { getAllBookings } from '../utils/sheets'
 import { img } from '../config/images'
+
+// Build the set of tree IDs that are statically pre-booked (dummy data)
+const STATIC_BOOKED_IDS = new Set(trees.filter((t) => t.isRented).map((t) => t.id))
+
+// Fetch live booking counts: static dummy count + real bookings on top
+function useLiveTreeCounts() {
+  const [liveRented, setLiveRented] = useState(TREE_STATS.rented)
+  useEffect(() => {
+    getAllBookings().then((res) => {
+      if (!res.ok || !Array.isArray(res.data)) return
+      const extra = new Set()
+      res.data.forEach((b) => {
+        const status = String(b.payment_status || '').toLowerCase()
+        if (status.includes('cancel') || status.includes('failed')) return
+        String(b.tree_ids || '').split(',').forEach((id) => {
+          const t = id.trim()
+          if (t && !STATIC_BOOKED_IDS.has(t)) extra.add(t)
+        })
+      })
+      setLiveRented(TREE_STATS.rented + extra.size)
+    }).catch(() => {})
+  }, [])
+  return {
+    rented:    liveRented,
+    available: TREE_STATS.total - liveRented,
+    total:     TREE_STATS.total,
+  }
+}
 
 // ── Animated hero slideshow ───────────────────────────────────────────────────
 // 4 distinct mango photos — orchard wide shot, yellow ripe pile, ripe on tree, market
@@ -155,7 +184,7 @@ function ReviewCard({ review }) {
 }
 
 // ── Animated Orchard Availability ────────────────────────────────────────────
-function OrchardAvailability() {
+function OrchardAvailability({ liveCounts }) {
   const [active, setActive] = useState(false)
   const [counts, setCounts] = useState({ booked: 0, available: 0, total: 0 })
   const ref = useRef(null)
@@ -169,7 +198,7 @@ function OrchardAvailability() {
     return () => obs.disconnect()
   }, [])
 
-  // Single RAF loop drives all three counters to avoid multiple animation loops
+  // Re-run animation whenever liveCounts updates or section becomes visible
   useEffect(() => {
     if (!active) return
     let raf
@@ -179,17 +208,17 @@ function OrchardAvailability() {
       const p = Math.min((Date.now() - start) / duration, 1)
       const ease = 1 - Math.pow(1 - p, 3)
       setCounts({
-        booked:    Math.round(TREE_STATS.rented    * ease),
-        available: Math.round(TREE_STATS.available * ease),
-        total:     Math.round(TREE_STATS.total     * ease),
+        booked:    Math.round(liveCounts.rented    * ease),
+        available: Math.round(liveCounts.available * ease),
+        total:     Math.round(liveCounts.total     * ease),
       })
       if (p < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [active])
+  }, [active, liveCounts.rented])
 
-  const pct    = TREE_STATS.rented / TREE_STATS.total
+  const pct    = liveCounts.rented / liveCounts.total
   const radius = 70
   const circ   = 2 * Math.PI * radius
 
@@ -203,7 +232,7 @@ function OrchardAvailability() {
           <p className="text-mango-400 font-semibold text-sm uppercase tracking-widest mb-2">Real-Time</p>
           <h2 className="font-display text-4xl font-bold">Orchard Availability</h2>
           <p className="text-gray-400 mt-3 text-sm">
-            Live snapshot of our {TREE_STATS.total}-tree orchard for Season {SITE.season}
+            Live snapshot of our {liveCounts.total}-tree orchard for Season {SITE.season}
           </p>
         </div>
 
@@ -279,11 +308,11 @@ function OrchardAvailability() {
           }
         `}</style>
         <div className={`flex flex-wrap justify-center gap-[3px] max-w-2xl mx-auto mb-10 px-2 ${active ? 'dot-active' : ''}`}>
-          {Array.from({ length: TREE_STATS.total }, (_, i) => (
+          {Array.from({ length: liveCounts.total }, (_, i) => (
             <div
               key={i}
               title={`MGO-${String(i + 1).padStart(3, '0')}`}
-              className={`orchard-dot w-2 h-2 rounded-full ${i < TREE_STATS.rented ? 'bg-green-400' : 'bg-mango-400'}`}
+              className={`orchard-dot w-2 h-2 rounded-full ${i < liveCounts.rented ? 'bg-green-400' : 'bg-mango-400'}`}
               style={{
                 opacity: 0,
                 animationDelay: `${Math.min(i * 1.5, 900)}ms`,
@@ -297,11 +326,11 @@ function OrchardAvailability() {
           <div className="flex gap-6 text-sm">
             <span className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-green-400 shrink-0" />
-              <span className="text-gray-300">Adopted ({TREE_STATS.rented})</span>
+              <span className="text-gray-300">Adopted ({liveCounts.rented})</span>
             </span>
             <span className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-mango-400 shrink-0" />
-              <span className="text-gray-300">Available ({TREE_STATS.available})</span>
+              <span className="text-gray-300">Available ({liveCounts.available})</span>
             </span>
           </div>
           <Link to="/trees"
@@ -322,7 +351,8 @@ const steps = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const rentedPct = Math.round((TREE_STATS.rented / TREE_STATS.total) * 100)
+  const liveCounts = useLiveTreeCounts()
+  const rentedPct = Math.round((liveCounts.rented / liveCounts.total) * 100)
 
   return (
     <div className="pt-16">
@@ -367,9 +397,9 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
-              { value: TREE_STATS.total, label: 'Total Trees' },
-              { value: TREE_STATS.rented, label: 'Trees Booked' },
-              { value: TREE_STATS.available, label: 'Trees Available' },
+              { value: liveCounts.total, label: 'Total Trees' },
+              { value: liveCounts.rented, label: 'Trees Booked' },
+              { value: liveCounts.available, label: 'Trees Available' },
               { value: `${rentedPct}%`, label: 'Orchard Adopted' },
             ].map((s) => (
               <div key={s.label}>
@@ -420,7 +450,7 @@ export default function Home() {
       </section>
 
       {/* ── Animated Orchard Availability ── */}
-      <OrchardAvailability />
+      <OrchardAvailability liveCounts={liveCounts} />
 
       {/* ── Reviews ── */}
       <section className="py-20 bg-mango-50">
@@ -440,7 +470,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-4 text-center text-white">
           <h2 className="font-display text-4xl font-bold mb-4">Ready to Adopt Your Mango Tree?</h2>
           <p className="text-mango-100 text-lg mb-8">
-            Only {TREE_STATS.available} trees left. Pre-book any package for just ₹1,000 before the season fills up!
+            Only {liveCounts.available} trees left. Pre-book any package for just ₹1,000 before the season fills up!
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link to="/booking" className="bg-white text-mango-600 hover:bg-mango-50 btn-primary px-8 py-4">
